@@ -11391,5 +11391,93 @@ function handleFirstUserInteraction() {
 </script>
 <!-- /TT_HIDE_REDUNDANT_TOP_CAMERA_NOTE_v1 -->
 
+
+<!-- TT_HIDE_TOP_GESTURE_HINT_v1 -->
+<script>
+(() => {
+  'use strict';
+
+  // Phrases that identify the top "how to use" bubble.
+  // (We keep these instructions only in the ? Help overlay.)
+  const KEYWORDS = [
+    "drag to rotate",
+    "pinch to zoom",
+    "double-tap",
+    "motion sensors available",
+    "tap anywhere to enable",
+    "attach/detach",
+    "lock/unlock"
+  ];
+
+  function hasKW(text) {
+    const t = (text || "").toLowerCase();
+    return KEYWORDS.some(k => t.includes(k));
+  }
+
+  function bestCandidate() {
+    const help = document.getElementById("ttHelpOverlay");
+
+    // Scan all elements; pick the best match near the top.
+    const all = Array.from(document.querySelectorAll("body *"));
+    let best = null;
+    let bestScore = -1;
+
+    for (const el of all) {
+      if (help && el.closest && el.closest("#ttHelpOverlay")) continue;
+
+      const txt = (el.textContent || "").trim();
+      if (!txt) continue;
+      if (!hasKW(txt)) continue;
+
+      const r = el.getBoundingClientRect?.();
+      if (!r) continue;
+
+      // Heuristic: the top bubble is near the top, relatively wide, and not huge.
+      const nearTop = (r.top < 180) ? 1000 : 0;
+      const wide = Math.min(r.width, 900);
+      const notTooTall = Math.max(0, 240 - r.height);
+      const score = nearTop + wide + notTooTall - (r.top * 2);
+
+      if (score > bestScore) {
+        bestScore = score;
+        best = el;
+      }
+    }
+    return best;
+  }
+
+  function hideBubble() {
+    const leaf = bestCandidate();
+    if (!leaf) return;
+
+    // Climb to a reasonable container so we don't just hide one line of text.
+    let target = leaf;
+    for (let i = 0; i < 9; i++) {
+      const parent = target.parentElement;
+      if (!parent) break;
+
+      const r = parent.getBoundingClientRect?.();
+      if (!r) break;
+
+      // Stop if parent is basically the whole page.
+      if (r.height > 320 || r.width > window.innerWidth * 0.98) break;
+
+      // Prefer parent if it still looks like the bubble.
+      if (r.top < 220 && r.width > 240) target = parent;
+      else break;
+    }
+
+    target.style.display = "none";
+  }
+
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", hideBubble, { once: true });
+  } else {
+    hideBubble();
+  }
+})();
+</script>
+<!-- /TT_HIDE_TOP_GESTURE_HINT_v1 -->
+
 </body>
 </html>
