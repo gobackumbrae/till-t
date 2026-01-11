@@ -11325,5 +11325,71 @@ function handleFirstUserInteraction() {
 <!-- /TT_HELP_OVERLAY_v1 -->
 
 
+
+<!-- TT_HIDE_REDUNDANT_TOP_CAMERA_NOTE_v1 -->
+<script>
+(() => {
+  'use strict';
+
+  // Only target the specific misunderstanding text, not general UI words.
+  const KEYWORDS = [
+    "phone camera",
+    "device camera",
+    "doesn't open your camera",
+    "does not open your camera",
+    "doesn't open the camera",
+    "does not open the camera",
+    "not the phone camera",
+    "not your phone camera",
+    "not the device camera",
+  ];
+
+  function hasKeyword(text) {
+    const t = (text || "").toLowerCase();
+    return KEYWORDS.some(k => t.includes(k));
+  }
+
+  function isLeaf(el) {
+    return el && el.children && el.children.length === 0;
+  }
+
+  function hideTarget(el) {
+    if (!el) return;
+    // If it's an inline element that sits inside a container, hide the container when safe.
+    let target = el;
+    if ((target.tagName === "SPAN" || target.tagName === "B" || target.tagName === "I") &&
+        target.parentElement && target.parentElement.children.length === 1) {
+      target = target.parentElement;
+    }
+    target.style.display = "none";
+  }
+
+  function run() {
+    // Never hide anything inside the ? help overlay
+    const helpOverlay = document.getElementById("ttHelpOverlay");
+
+    const all = Array.from(document.querySelectorAll("body *"));
+    for (const el of all) {
+      if (!isLeaf(el)) continue;
+      if (helpOverlay && (el === helpOverlay || el.closest("#ttHelpOverlay"))) continue;
+
+      const txt = (el.textContent || "").trim();
+      if (!txt) continue;
+
+      if (hasKeyword(txt)) {
+        hideTarget(el);
+      }
+    }
+  }
+
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", run, { once: true });
+  } else {
+    run();
+  }
+})();
+</script>
+<!-- /TT_HIDE_REDUNDANT_TOP_CAMERA_NOTE_v1 -->
+
 </body>
 </html>
