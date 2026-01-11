@@ -1876,6 +1876,7 @@
       </div>
       <div class="overlay-header-actions">
         <button type="button" id="soundToggle" class="icon-chip" aria-label="Toggle sound">🔊</button>
+        <button type="button" id="helpBtn" class="icon-chip" aria-label="Help" title="Help">?</button>
         <span class="range-status status-chip in-range" id="rangeStatus">IN RANGE</span>
         <button type="button" id="overlayCloseBtn" class="icon-chip icon-collapse" aria-label="Collapse settings" title="Collapse">▾</button>
       </div>
@@ -2069,7 +2070,7 @@
 
           <div class="row center-controls" id="rowCenter">
             <button type="button" id="centerFromCurrentBtn" class="btn btn-ghost">Use current tilt</button>
-            <button type="button" id="centerFromCameraBtn" class="btn btn-ghost">Use current cam</button>
+            <button type="button" id="centerFromCameraBtn" class="btn btn-ghost">Use current view</button>
             <button type="button" id="centerResetBtn" class="btn btn-ghost">Reset</button>
             <span id="centerSummary">@ P 0.0°, R 0.0°</span>
           </div>
@@ -2092,7 +2093,7 @@
 
           <div class="row advanced-row" id="rowCamAttachYawOffset">
             <label class="slider-label">
-              Cam↔Grav offset
+              View↔Tilt offset
               <input type="range" id="camAttachYawOffsetSlider" min="0" max="360" step="1" value="0">
               <span id="camAttachYawOffsetValue">0°</span>
             </label>
@@ -2170,7 +2171,7 @@
 </button>
 
 <div id="status" role="status" aria-live="polite">
-  Tap anywhere to enable sensors and audio. Drag to rotate. Pinch to zoom. Double‑tap to attach/detach camera to gravity. Long‑press to set band center to the camera.
+  Tap anywhere to enable sensors and audio. Drag to rotate. Pinch to zoom. Double‑tap to lock/unlock View to Tilt. Long‑press to set band center to View.
 </div>
 
 <div class="axis-label" id="labelPosX">+X</div>
@@ -8185,7 +8186,7 @@ centerFromCurrentBtn.addEventListener('click', () => {
 
     // If we're in Polygon mode, treat the camera "roll" (rotation of the camera's up
     // vector around the view axis) as the polygon's rotation about its center.
-    // This makes the band rotation follow the camera when you "Use current cam".
+    // This makes the band rotation follow the camera when you "Use current view".
     if (mode === 'polygon' && bandRotationInput) {
       let rot = (typeof camAngles.rollDeg === 'number') ? camAngles.rollDeg : 0;
       if (!Number.isFinite(rot)) rot = 0;
@@ -8811,12 +8812,12 @@ window.addEventListener('resize', () => {
         const rotText = formatAngle360(camAngles.rollDeg, 1);
 
         const camLabelText =
-          `Cam P ${camAngles.pitchDeg.toFixed(1)}°  ` +
+          `View P ${camAngles.pitchDeg.toFixed(1)}°  ` +
           `R ${camAngles.yawDeg.toFixed(1)}°  ` +
           `Rot ${rotText}`;
         setTiltLabelTextAnimated(cameraTiltLabel, camLabelText);
       } else {
-        setTiltLabelTextAnimated(cameraTiltLabel, 'Cam: n/a');
+        setTiltLabelTextAnimated(cameraTiltLabel, 'View: n/a');
       }
     }
 
@@ -11176,42 +11177,40 @@ function handleFirstUserInteraction() {
   updateBandSizeUIFromState();
   updateBandRotationUIFromState();
   updateUI();
-  setStatus('Tap anywhere to enable sensors and audio. Drag to rotate. Pinch to zoom. Double‑tap to attach/detach camera to gravity. Long‑press to set band center to the camera.');
+  setStatus('Tap anywhere to enable sensors and audio. Drag to rotate. Pinch to zoom. Double‑tap to lock/unlock View to Tilt. Long‑press to set band center to View.');
   requestAnimationFrame(render);
 })();
 </script>
 
+
 <!-- TT_HELP_OVERLAY_v1 -->
 <script>
 (() => {
-  const LS_SEEN   = "tt_help_seen_v1";
-  const LS_NOAUTO = "tt_help_noauto_v1";
+  'use strict';
 
-  function injectStyle() {
+  function ensureStyle() {
     if (document.getElementById("tthelp-style")) return;
     const style = document.createElement("style");
     style.id = "tthelp-style";
     style.textContent = `
       .tthelp-overlay{
         position:fixed; inset:0;
-        background: rgba(0,0,0,0.62);
+        background: rgba(0,0,0,0.55);
         display:flex; align-items:center; justify-content:center;
         padding: max(14px, env(safe-area-inset-top)) 14px max(14px, env(safe-area-inset-bottom)) 14px;
         z-index: 999999;
       }
       .tthelp-hidden{ display:none !important; }
-
       .tthelp-card{
-        width: min(680px, 96vw);
-        max-height: min(86vh, 820px);
-        overflow: hidden;
+        width: min(560px, 94vw);
+        max-height: min(78vh, 560px);
+        overflow:hidden;
         border-radius: 18px;
         background: rgba(18, 18, 22, 0.92);
         border: 1px solid rgba(255,255,255,0.10);
-        box-shadow: 0 20px 70px rgba(0,0,0,0.55);
+        box-shadow: 0 18px 60px rgba(0,0,0,0.55);
         display:flex; flex-direction:column;
       }
-
       .tthelp-head{
         display:flex; align-items:flex-start; justify-content:space-between;
         padding: 14px 14px 10px 14px;
@@ -11219,7 +11218,7 @@ function handleFirstUserInteraction() {
         gap: 10px;
       }
       .tthelp-title{
-        font: 800 15px/1.15 system-ui, -apple-system, Segoe UI, Roboto, Arial;
+        font: 900 14px/1.15 system-ui, -apple-system, Segoe UI, Roboto, Arial;
         color: rgba(255,255,255,0.96);
         letter-spacing: 0.2px;
       }
@@ -11228,7 +11227,6 @@ function handleFirstUserInteraction() {
         font: 600 12px/1.25 system-ui, -apple-system, Segoe UI, Roboto, Arial;
         color: rgba(255,255,255,0.70);
       }
-
       .tthelp-x{
         border: 0;
         background: rgba(255,255,255,0.10);
@@ -11237,210 +11235,83 @@ function handleFirstUserInteraction() {
         height: 34px; width: 44px;
         font: 900 16px/34px system-ui, -apple-system, Segoe UI, Roboto, Arial;
       }
-
       .tthelp-body{
-        padding: 12px 14px 12px 14px;
+        padding: 12px 14px 14px 14px;
         overflow:auto;
       }
-      .tthelp-body h3{
-        margin: 14px 0 8px 0;
-        font: 800 13px/1.2 system-ui, -apple-system, Segoe UI, Roboto, Arial;
-        color: rgba(255,255,255,0.92);
+      .tthelp-body ul{ margin: 10px 0 0 18px; padding:0; }
+      .tthelp-body li{
+        font: 650 12.5px/1.42 system-ui, -apple-system, Segoe UI, Roboto, Arial;
+        color: rgba(255,255,255,0.82);
+        margin: 8px 0;
       }
-      .tthelp-body p, .tthelp-body li{
-        font: 600 12.5px/1.42 system-ui, -apple-system, Segoe UI, Roboto, Arial;
-        color: rgba(255,255,255,0.80);
-      }
-      .tthelp-body ul{ margin: 8px 0 0 18px; padding:0; }
-
       .tthelp-callout{
         margin-top: 12px;
         padding: 10px 10px;
         border-radius: 14px;
         background: rgba(255,255,255,0.06);
         border: 1px solid rgba(255,255,255,0.08);
-      }
-
-      .tthelp-foot{
-        padding: 12px 14px 14px 14px;
-        border-top: 1px solid rgba(255,255,255,0.08);
-        display:flex; align-items:center; justify-content:space-between;
-        gap: 10px;
-      }
-      .tthelp-check{
-        display:flex; align-items:center; gap: 8px;
-        font: 700 12px/1.2 system-ui, -apple-system, Segoe UI, Roboto, Arial;
-        color: rgba(255,255,255,0.75);
-        user-select:none;
-      }
-      .tthelp-btn{
-        border:0;
-        border-radius: 14px;
-        padding: 10px 12px;
-        background: rgba(255,255,255,0.12);
-        color: rgba(255,255,255,0.92);
-        font: 900 13px/1 system-ui, -apple-system, Segoe UI, Roboto, Arial;
-      }
-      .tthelp-btn.primary{
-        background: rgba(77, 147, 255, 0.92);
-        color: rgba(10, 10, 14, 0.95);
+        font: 650 12px/1.35 system-ui, -apple-system, Segoe UI, Roboto, Arial;
+        color: rgba(255,255,255,0.78);
       }
     `;
     document.head.appendChild(style);
   }
 
-  function buildOverlay() {
-    if (document.getElementById("ttHelpOverlay")) return;
+  function ensureOverlay() {
+    let overlay = document.getElementById("ttHelpOverlay");
+    if (overlay) return overlay;
 
-    const overlay = document.createElement("div");
+    overlay = document.createElement("div");
     overlay.id = "ttHelpOverlay";
     overlay.className = "tthelp-overlay tthelp-hidden";
     overlay.innerHTML = `
       <div class="tthelp-card" role="dialog" aria-modal="true" aria-labelledby="tthelpTitle">
         <div class="tthelp-head">
           <div>
-            <div id="tthelpTitle" class="tthelp-title">TilT — Quick Start</div>
-            <div class="tthelp-sub">Long‑press the sphere to open this help again.</div>
+            <div id="tthelpTitle" class="tthelp-title">Help</div>
+            <div class="tthelp-sub">Short cheatsheet. Nothing here opens your phone camera.</div>
           </div>
           <button class="tthelp-x" id="ttHelpClose" aria-label="Close help">✕</button>
         </div>
 
         <div class="tthelp-body">
-          <h3>Start measuring</h3>
           <ul>
-            <li>Tap once (or open the panel) and allow motion permission if prompted.</li>
-            <li>The <b>tilt (gravity) crosshair</b> shows your current device orientation.</li>
-          </ul>
-
-          <h3>Bands</h3>
-          <ul>
-            <li>Colored regions are “in-range” orientations. If the crosshair is inside: <b>IN</b>.</li>
-            <li><b>Tap on a band</b> on the sphere to select it for editing.</li>
-            <li>If multiple bands overlap, keep tapping to <b>cycle</b> through them.</li>
-          </ul>
-
-          <h3>Edit</h3>
-          <ul>
-            <li>Drag corners/edges to reshape (polygon/circle/rect modes).</li>
-            <li>Pinch to <b>zoom</b>.</li>
-            <li>Use the panel to change <b>mode</b>, <b>ranges</b>, and per‑band settings.</li>
-          </ul>
-
-          <h3>Camera lock</h3>
-          <ul>
-            <li><b>Double‑tap</b> the sphere to attach/detach camera lock.</li>
-            <li><b>Rot</b> stays visible even when labels overlap.</li>
-          </ul>
-
-          <h3>BeepCount & CountDown</h3>
-          <ul>
-            <li><b>BeepCount</b>: beeps at your interval while in a band (optional).</li>
-            <li><b>CountDown</b>: speaks remaining seconds until your in-band goal time (optional).</li>
-            <li>These are <b>per-band</b> features if enabled in your build.</li>
+            <li><b>Tilt crosshair</b> = device orientation (gravity).</li>
+            <li><b>View crosshair</b> = virtual reference direction (not the phone camera).</li>
+            <li><b>Tap a band</b> on the sphere to select it (tap again to cycle overlaps).</li>
+            <li><b>Drag handles</b> to reshape. <b>Pinch</b> to zoom.</li>
+            <li><b>Double‑tap</b> = lock/unlock View ↔ Tilt. <b>Long‑press</b> = set band center to View.</li>
           </ul>
 
           <div class="tthelp-callout">
-            <p><b>Troubleshooting:</b> If nothing moves, ensure motion permission is enabled, then reload.</p>
-            <p><b>Privacy:</b> Runs on-device; no motion data is uploaded by default.</p>
-          </div>
-        </div>
-
-        <div class="tthelp-foot">
-          <label class="tthelp-check">
-            <input type="checkbox" id="ttHelpNoAuto">
-            Don’t show automatically
-          </label>
-          <div style="display:flex; gap:10px;">
-            <button class="tthelp-btn" id="ttHelpLater">Later</button>
-            <button class="tthelp-btn primary" id="ttHelpGotIt">Got it</button>
+            If motion doesn’t respond: enable motion permission in your browser and reload.
           </div>
         </div>
       </div>
     `;
     document.body.appendChild(overlay);
 
-    const noAuto = overlay.querySelector("#ttHelpNoAuto");
-
     function hide(){ overlay.classList.add("tthelp-hidden"); }
     function show(){ overlay.classList.remove("tthelp-hidden"); }
 
     overlay.addEventListener("click", (e) => { if (e.target === overlay) hide(); });
     overlay.querySelector("#ttHelpClose").addEventListener("click", hide);
-    overlay.querySelector("#ttHelpLater").addEventListener("click", hide);
 
-    overlay.querySelector("#ttHelpGotIt").addEventListener("click", () => {
-      try { localStorage.setItem(LS_SEEN, "1"); } catch {}
-      try {
-        if (noAuto.checked) localStorage.setItem(LS_NOAUTO, "1");
-        else localStorage.removeItem(LS_NOAUTO);
-      } catch {}
-      hide();
-    });
-
-    window.ttHelp = {
-      show, hide,
-      maybeAutoShow() {
-        try {
-          if (localStorage.getItem(LS_NOAUTO) === "1") return;
-          if (localStorage.getItem(LS_SEEN) === "1") return;
-        } catch {}
-        show();
-      }
-    };
-  }
-
-  function attachLongPressOpen() {
-    const canvas =
-      document.querySelector("#glcanvas") ||
-      document.querySelector("canvas");
-
-    if (!canvas) return;
-
-    let timer = null;
-    let downX = 0, downY = 0, moved = false;
-
-    function clear() {
-      if (timer) { clearTimeout(timer); timer = null; }
-    }
-
-    canvas.addEventListener("pointerdown", (e) => {
-      if (!e.isPrimary) return;
-      if (e.target !== canvas) return;
-
-      moved = false;
-      downX = e.clientX; downY = e.clientY;
-
-      clear();
-      timer = setTimeout(() => {
-        timer = null;
-        if (!moved) window.ttHelp?.show?.();
-      }, 550);
-    }, { passive: true });
-
-    canvas.addEventListener("pointermove", (e) => {
-      if (!timer) return;
-      const dx = e.clientX - downX;
-      const dy = e.clientY - downY;
-      if (dx*dx + dy*dy > 12*12) { moved = true; clear(); }
-    }, { passive: true });
-
-    canvas.addEventListener("pointerup", clear, { passive: true });
-    canvas.addEventListener("pointercancel", clear, { passive: true });
-    canvas.addEventListener("pointerleave", clear, { passive: true });
+    window.ttHelp = { show, hide };
+    return overlay;
   }
 
   function init() {
-    injectStyle();
-    buildOverlay();
-    attachLongPressOpen();
+    ensureStyle();
+    ensureOverlay();
 
-    // Auto-show once, but only after the first user gesture
-    const onFirstGesture = () => {
-      setTimeout(() => window.ttHelp?.maybeAutoShow?.(), 220);
-    };
-    document.addEventListener("pointerdown", onFirstGesture, { capture: true, once: true });
+    const helpBtn = document.getElementById("helpBtn");
+    if (helpBtn) {
+      helpBtn.addEventListener("click", () => window.ttHelp?.show?.(), { passive: true });
+    }
 
-    // Desktop convenience: "?" opens, Esc closes
+    // Optional desktop shortcuts
     document.addEventListener("keydown", (e) => {
       if (e.key === "?" || (e.shiftKey && e.key === "/")) window.ttHelp?.show?.();
       if (e.key === "Escape") window.ttHelp?.hide?.();
@@ -11452,6 +11323,7 @@ function handleFirstUserInteraction() {
 })();
 </script>
 <!-- /TT_HELP_OVERLAY_v1 -->
+
 
 </body>
 </html>
