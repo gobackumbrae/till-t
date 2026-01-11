@@ -11021,7 +11021,13 @@ function handleFirstUserInteraction() {
       baseUp[2] * cosA + baseRight[2] * sinA
     ];
     const gRight = normalize3(cross3(gUp, gCenter));
-    lastGravityUp = gUp.slice();
+    
+    // TT_POLE_FLIP_FIX_v1: keep gravity crosshair frame continuous near poles (prevents 180° snaps)
+    if (dot3(gUp, lastGravityUp) < 0) {
+      gUp[0] = -gUp[0]; gUp[1] = -gUp[1]; gUp[2] = -gUp[2];
+      gRight[0] = -gRight[0]; gRight[1] = -gRight[1]; gRight[2] = -gRight[2];
+    }
+lastGravityUp = gUp.slice();
 
     gl.uniform3f(uGravityCenterLoc, gCenter[0], gCenter[1], gCenter[2]);
     gl.uniform3f(uGravityUpLoc,     gUp[0],     gUp[1],     gUp[2]);
@@ -11048,7 +11054,13 @@ function handleFirstUserInteraction() {
       camBaseUp[2] * cosCam + camBaseRight[2] * sinCam
     ];
     const camRightManual = normalize3(cross3(camUpManual, cCenter));
-    lastCamUp = camUpManual.slice();
+    
+    // TT_POLE_FLIP_FIX_v1: keep view crosshair frame continuous near poles (prevents 180° snaps)
+    if (dot3(camUpManual, lastCamUp) < 0) {
+      camUpManual[0] = -camUpManual[0]; camUpManual[1] = -camUpManual[1]; camUpManual[2] = -camUpManual[2];
+      camRightManual[0] = -camRightManual[0]; camRightManual[1] = -camRightManual[1]; camRightManual[2] = -camRightManual[2];
+    }
+lastCamUp = camUpManual.slice();
 
     gl.uniform3f(uCamCenterLoc, cCenter[0], cCenter[1], cCenter[2]);
     gl.uniform3f(uCamUpLoc,     camUpManual[0], camUpManual[1], camUpManual[2]);
