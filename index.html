@@ -10998,13 +10998,67 @@ function handleFirstUserInteraction() {
     // --- Gravity + camera cross uniforms -----------------------------------
     const gCenter = normalize3(gravityDir);
 
-    // Base tangent frame (fixed fallback): project world up onto the tangent plane.
+    // TT_STABLE_TANGENT_FRAME_v1
+    // Prevent snap-rotations when crossing poles/hemispheres by using a
+    // rotation-minimizing (transported) tangent frame, then *gently* re-aligning
+    // toward the world-up/heading frame away from poles.
+    const prevGravityUp = lastGravityUp.slice();
+    const prevCamUp     = lastCamUp.slice();
+
+    const ttSmoothstep01 = (e0, e1, x) => {
+      const t = clamp((x - e0) / (e1 - e0), 0, 1);
+      return t * t * (3 - 2 * t);
+    };
+
+    const ttStabilizeUp = (center, prevUp, targetUp) => {
+      // Start from transported previous up (project onto the new tangent plane).
+      let up = projectOntoTangent(prevUp, center);
+
+      // If projection degenerates (rare), fall back to targetUp or a deterministic axis.
+      if (!up) up = targetUp;
+      if (!up) {
+        let fb = (Math.abs(center[2]) < 0.9) ? [0, 0, 1] : [1, 0, 0];
+        up = projectOntoTangent(fb, center) || [0, 1, 0];
+      }
+
+      // Optionally pull toward targetUp (but avoid poles where target can get unstable).
+      if (targetUp) {
+        // Put target in the same hemisphere as current up (avoids 180° flips).
+        if (dot3(targetUp, up) < 0) targetUp = [-targetUp[0], -targetUp[1], -targetUp[2]];
+
+        // 0 near poles (projection length ~0), 1 away from poles.
+        const d = clamp(dot3(worldUp, center), -1, 1);
+        const projLen = Math.sqrt(Math.max(0, 1 - d * d));
+        const align = ttSmoothstep01(0.08, 0.25, projLen);
+
+        // Time-based smoothing so even a noisy target can't snap the frame.
+        const dtSafe = (typeof dt === "number" && isFinite(dt) && dt > 0) ? dt : 0.016;
+        const w = (1 - Math.exp(-12.0 * dtSafe)) * align;
+
+        up = normalize3([
+          up[0] * (1 - w) + targetUp[0] * w,
+          up[1] * (1 - w) + targetUp[1] * w,
+          up[2] * (1 - w) + targetUp[2] * w,
+        ]);
+
+        up = projectOntoTangent(up, center) || up;
+      }
+
+      // Final continuity check vs previous up (can still be needed after projection).
+      if (dot3(up, prevUp) < 0) up = [-up[0], -up[1], -up[2]];
+      return up;
+    };
+
+    // ---------------- Gravity cross (magenta) ----------------
+    // Base tangent frame (world-up projected onto the tangent plane).
     let baseUp = projectOntoTangent(worldUp, gCenter);
-    if (!baseUp) baseUp = [0,0,1];
+    if (!baseUp) {
+      baseUp = (Math.abs(gCenter[2]) < 0.9) ? [0, 0, 1] : [1, 0, 0];
+      baseUp = projectOntoTangent(baseUp, gCenter) || [0, 0, 1];
+    }
     let baseRight = normalize3(cross3(baseUp, gCenter));
 
     // Use compass heading to rotate the gravity cross around the gravity axis.
-    // If compass is unavailable, deviceYawDeg is null and yawRad stays 0, so the cross stays fixed.
     let yawRad = 0;
     if (deviceYawDeg != null && !Number.isNaN(deviceYawDeg)) {
       yawRad = degToRad(deviceYawDeg);
@@ -11015,135 +11069,51 @@ function handleFirstUserInteraction() {
     const cosA = Math.cos(yawRad);
     const sinA = Math.sin(yawRad);
 
-    const gUp = [
+    let gUpTarget = [
       baseUp[0] * cosA + baseRight[0] * sinA,
       baseUp[1] * cosA + baseRight[1] * sinA,
       baseUp[2] * cosA + baseRight[2] * sinA
     ];
+    gUpTarget = projectOntoTangent(gUpTarget, gCenter) || baseUp;
+
+    const gUp = ttStabilizeUp(gCenter, prevGravityUp, gUpTarget);
     const gRight = normalize3(cross3(gUp, gCenter));
-
-    // TT_POLE_STABLE_FRAME_v2: stabilize gravity crosshair twist near poles (prevents snap/flicker)
-    {
-      const pole = Math.abs(gCenter[1]);
-      // Blend from 0→1 as we approach the pole (tuned to avoid gUp singularity)
-      let tPole = (pole - 0.85) / (0.98 - 0.85);
-      if (tPole < 0) tPole = 0; else if (tPole > 1) tPole = 1;
-      tPole = tPole * tPole * (3 - 2 * tPole);
-
-      // Transport previous up into the new tangent plane
-      const d = dot3(lastGravityUp, gCenter);
-      let ux = lastGravityUp[0] - gCenter[0] * d;
-      let uy = lastGravityUp[1] - gCenter[1] * d;
-      let uz = lastGravityUp[2] - gCenter[2] * d;
-      let ulen = Math.hypot(ux, uy, uz);
-
-      if (ulen < 1e-6) {
-        // Fallback: pick a stable axis that isn't parallel to gCenter
-        const ref = (Math.abs(gCenter[2]) < 0.9) ? [0,0,1] : [1,0,0];
-        const rTmp = normalize3(cross3(ref, gCenter));
-        const uTmp = normalize3(cross3(gCenter, rTmp));
-        ux = uTmp[0]; uy = uTmp[1]; uz = uTmp[2];
-        ulen = 1.0;
-      } else {
-        ux /= ulen; uy /= ulen; uz /= ulen;
-      }
-
-      if (tPole > 0.0) {
-        // Blend current (world-up projected) gUp with transported/fallback up
-        let bx = gUp[0] * (1 - tPole) + ux * tPole;
-        let by = gUp[1] * (1 - tPole) + uy * tPole;
-        let bz = gUp[2] * (1 - tPole) + uz * tPole;
-        const bl = Math.hypot(bx, by, bz);
-        if (bl > 1e-6) {
-          bx /= bl; by /= bl; bz /= bl;
-          gUp[0] = bx; gUp[1] = by; gUp[2] = bz;
-
-          const rr = normalize3(cross3(gUp, gCenter));
-          gRight[0] = rr[0]; gRight[1] = rr[1]; gRight[2] = rr[2];
-        }
-      }
-
-      // Final continuity guard (prevents 180° snap if it ever tries to flip)
-      if (dot3(gUp, lastGravityUp) < 0) {
-        gUp[0] = -gUp[0]; gUp[1] = -gUp[1]; gUp[2] = -gUp[2];
-        gRight[0] = -gRight[0]; gRight[1] = -gRight[1]; gRight[2] = -gRight[2];
-      }
-    }
-lastGravityUp = gUp.slice();
+    lastGravityUp = gUp.slice();
 
     gl.uniform3f(uGravityCenterLoc, gCenter[0], gCenter[1], gCenter[2]);
     gl.uniform3f(uGravityUpLoc,     gUp[0],     gUp[1],     gUp[2]);
     gl.uniform3f(uGravityRightLoc,  gRight[0],  gRight[1],  gRight[2]);
 
-    // Camera crosshair (cyan)
+    // ---------------- View/Camera cross (cyan) ----------------
     const cCenter = normalize3(camCenter);
 
     let camBaseUp = projectOntoTangent(worldUp, cCenter);
-    if (!camBaseUp) camBaseUp = [0,0,1];
+    if (!camBaseUp) {
+      camBaseUp = (Math.abs(cCenter[2]) < 0.9) ? [0, 0, 1] : [1, 0, 0];
+      camBaseUp = projectOntoTangent(camBaseUp, cCenter) || [0, 0, 1];
+    }
     let camBaseRight = normalize3(cross3(camBaseUp, cCenter));
 
-    // User-controlled twist (camCrossYawDeg) is treated as an offset.
-    // When the camera is attached to gravity, we include the attach yaw offset.
+    // User-controlled twist (camCrossYawDeg) + attach offset
     const camYawTotalDeg = wrap360(camCrossYawDeg + (cameraAttachedToGravity ? camAttachYawOffsetDeg : 0));
     const camYawTotalRad = degToRad(camYawTotalDeg);
-
     const cosCam = Math.cos(camYawTotalRad);
     const sinCam = Math.sin(camYawTotalRad);
 
-    const camUpManual = [
+    let camUpTarget = [
       camBaseUp[0] * cosCam + camBaseRight[0] * sinCam,
       camBaseUp[1] * cosCam + camBaseRight[1] * sinCam,
       camBaseUp[2] * cosCam + camBaseRight[2] * sinCam
     ];
-    const camRightManual = normalize3(cross3(camUpManual, cCenter));
+    camUpTarget = projectOntoTangent(camUpTarget, cCenter) || camBaseUp;
 
-    // TT_POLE_STABLE_FRAME_v2: stabilize view crosshair twist near poles (prevents snap/flicker)
-    {
-      const pole = Math.abs(cCenter[1]);
-      let tPole = (pole - 0.85) / (0.98 - 0.85);
-      if (tPole < 0) tPole = 0; else if (tPole > 1) tPole = 1;
-      tPole = tPole * tPole * (3 - 2 * tPole);
-
-      const d = dot3(lastCamUp, cCenter);
-      let ux = lastCamUp[0] - cCenter[0] * d;
-      let uy = lastCamUp[1] - cCenter[1] * d;
-      let uz = lastCamUp[2] - cCenter[2] * d;
-      let ulen = Math.hypot(ux, uy, uz);
-
-      if (ulen < 1e-6) {
-        const ref = (Math.abs(cCenter[2]) < 0.9) ? [0,0,1] : [1,0,0];
-        const rTmp = normalize3(cross3(ref, cCenter));
-        const uTmp = normalize3(cross3(cCenter, rTmp));
-        ux = uTmp[0]; uy = uTmp[1]; uz = uTmp[2];
-        ulen = 1.0;
-      } else {
-        ux /= ulen; uy /= ulen; uz /= ulen;
-      }
-
-      if (tPole > 0.0) {
-        let bx = camUpManual[0] * (1 - tPole) + ux * tPole;
-        let by = camUpManual[1] * (1 - tPole) + uy * tPole;
-        let bz = camUpManual[2] * (1 - tPole) + uz * tPole;
-        const bl = Math.hypot(bx, by, bz);
-        if (bl > 1e-6) {
-          bx /= bl; by /= bl; bz /= bl;
-          camUpManual[0] = bx; camUpManual[1] = by; camUpManual[2] = bz;
-
-          const rr = normalize3(cross3(camUpManual, cCenter));
-          camRightManual[0] = rr[0]; camRightManual[1] = rr[1]; camRightManual[2] = rr[2];
-        }
-      }
-
-      if (dot3(camUpManual, lastCamUp) < 0) {
-        camUpManual[0] = -camUpManual[0]; camUpManual[1] = -camUpManual[1]; camUpManual[2] = -camUpManual[2];
-        camRightManual[0] = -camRightManual[0]; camRightManual[1] = -camRightManual[1]; camRightManual[2] = -camRightManual[2];
-      }
-    }
-lastCamUp = camUpManual.slice();
+    const camUp = ttStabilizeUp(cCenter, prevCamUp, camUpTarget);
+    const camRight = normalize3(cross3(camUp, cCenter));
+    lastCamUp = camUp.slice();
 
     gl.uniform3f(uCamCenterLoc, cCenter[0], cCenter[1], cCenter[2]);
-    gl.uniform3f(uCamUpLoc,     camUpManual[0], camUpManual[1], camUpManual[2]);
-    gl.uniform3f(uCamRightLoc,  camRightManual[0], camRightManual[1], camRightManual[2]);
+    gl.uniform3f(uCamUpLoc,     camUp[0],   camUp[1],   camUp[2]);
+    gl.uniform3f(uCamRightLoc,  camRight[0],camRight[1],camRight[2]);
 
     // Band passes (base + overlays)
     ensureBandsInitialized();
