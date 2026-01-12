@@ -11021,11 +11021,53 @@ function handleFirstUserInteraction() {
       baseUp[2] * cosA + baseRight[2] * sinA
     ];
     const gRight = normalize3(cross3(gUp, gCenter));
-    
-    // TT_POLE_FLIP_FIX_v1: keep gravity crosshair frame continuous near poles (prevents 180° snaps)
-    if (dot3(gUp, lastGravityUp) < 0) {
-      gUp[0] = -gUp[0]; gUp[1] = -gUp[1]; gUp[2] = -gUp[2];
-      gRight[0] = -gRight[0]; gRight[1] = -gRight[1]; gRight[2] = -gRight[2];
+
+    // TT_POLE_STABLE_FRAME_v2: stabilize gravity crosshair twist near poles (prevents snap/flicker)
+    {
+      const pole = Math.abs(gCenter[1]);
+      // Blend from 0→1 as we approach the pole (tuned to avoid gUp singularity)
+      let tPole = (pole - 0.85) / (0.98 - 0.85);
+      if (tPole < 0) tPole = 0; else if (tPole > 1) tPole = 1;
+      tPole = tPole * tPole * (3 - 2 * tPole);
+
+      // Transport previous up into the new tangent plane
+      const d = dot3(lastGravityUp, gCenter);
+      let ux = lastGravityUp[0] - gCenter[0] * d;
+      let uy = lastGravityUp[1] - gCenter[1] * d;
+      let uz = lastGravityUp[2] - gCenter[2] * d;
+      let ulen = Math.hypot(ux, uy, uz);
+
+      if (ulen < 1e-6) {
+        // Fallback: pick a stable axis that isn't parallel to gCenter
+        const ref = (Math.abs(gCenter[2]) < 0.9) ? [0,0,1] : [1,0,0];
+        const rTmp = normalize3(cross3(ref, gCenter));
+        const uTmp = normalize3(cross3(gCenter, rTmp));
+        ux = uTmp[0]; uy = uTmp[1]; uz = uTmp[2];
+        ulen = 1.0;
+      } else {
+        ux /= ulen; uy /= ulen; uz /= ulen;
+      }
+
+      if (tPole > 0.0) {
+        // Blend current (world-up projected) gUp with transported/fallback up
+        let bx = gUp[0] * (1 - tPole) + ux * tPole;
+        let by = gUp[1] * (1 - tPole) + uy * tPole;
+        let bz = gUp[2] * (1 - tPole) + uz * tPole;
+        const bl = Math.hypot(bx, by, bz);
+        if (bl > 1e-6) {
+          bx /= bl; by /= bl; bz /= bl;
+          gUp[0] = bx; gUp[1] = by; gUp[2] = bz;
+
+          const rr = normalize3(cross3(gUp, gCenter));
+          gRight[0] = rr[0]; gRight[1] = rr[1]; gRight[2] = rr[2];
+        }
+      }
+
+      // Final continuity guard (prevents 180° snap if it ever tries to flip)
+      if (dot3(gUp, lastGravityUp) < 0) {
+        gUp[0] = -gUp[0]; gUp[1] = -gUp[1]; gUp[2] = -gUp[2];
+        gRight[0] = -gRight[0]; gRight[1] = -gRight[1]; gRight[2] = -gRight[2];
+      }
     }
 lastGravityUp = gUp.slice();
 
@@ -11054,11 +11096,48 @@ lastGravityUp = gUp.slice();
       camBaseUp[2] * cosCam + camBaseRight[2] * sinCam
     ];
     const camRightManual = normalize3(cross3(camUpManual, cCenter));
-    
-    // TT_POLE_FLIP_FIX_v1: keep view crosshair frame continuous near poles (prevents 180° snaps)
-    if (dot3(camUpManual, lastCamUp) < 0) {
-      camUpManual[0] = -camUpManual[0]; camUpManual[1] = -camUpManual[1]; camUpManual[2] = -camUpManual[2];
-      camRightManual[0] = -camRightManual[0]; camRightManual[1] = -camRightManual[1]; camRightManual[2] = -camRightManual[2];
+
+    // TT_POLE_STABLE_FRAME_v2: stabilize view crosshair twist near poles (prevents snap/flicker)
+    {
+      const pole = Math.abs(cCenter[1]);
+      let tPole = (pole - 0.85) / (0.98 - 0.85);
+      if (tPole < 0) tPole = 0; else if (tPole > 1) tPole = 1;
+      tPole = tPole * tPole * (3 - 2 * tPole);
+
+      const d = dot3(lastCamUp, cCenter);
+      let ux = lastCamUp[0] - cCenter[0] * d;
+      let uy = lastCamUp[1] - cCenter[1] * d;
+      let uz = lastCamUp[2] - cCenter[2] * d;
+      let ulen = Math.hypot(ux, uy, uz);
+
+      if (ulen < 1e-6) {
+        const ref = (Math.abs(cCenter[2]) < 0.9) ? [0,0,1] : [1,0,0];
+        const rTmp = normalize3(cross3(ref, cCenter));
+        const uTmp = normalize3(cross3(cCenter, rTmp));
+        ux = uTmp[0]; uy = uTmp[1]; uz = uTmp[2];
+        ulen = 1.0;
+      } else {
+        ux /= ulen; uy /= ulen; uz /= ulen;
+      }
+
+      if (tPole > 0.0) {
+        let bx = camUpManual[0] * (1 - tPole) + ux * tPole;
+        let by = camUpManual[1] * (1 - tPole) + uy * tPole;
+        let bz = camUpManual[2] * (1 - tPole) + uz * tPole;
+        const bl = Math.hypot(bx, by, bz);
+        if (bl > 1e-6) {
+          bx /= bl; by /= bl; bz /= bl;
+          camUpManual[0] = bx; camUpManual[1] = by; camUpManual[2] = bz;
+
+          const rr = normalize3(cross3(camUpManual, cCenter));
+          camRightManual[0] = rr[0]; camRightManual[1] = rr[1]; camRightManual[2] = rr[2];
+        }
+      }
+
+      if (dot3(camUpManual, lastCamUp) < 0) {
+        camUpManual[0] = -camUpManual[0]; camUpManual[1] = -camUpManual[1]; camUpManual[2] = -camUpManual[2];
+        camRightManual[0] = -camRightManual[0]; camRightManual[1] = -camRightManual[1]; camRightManual[2] = -camRightManual[2];
+      }
     }
 lastCamUp = camUpManual.slice();
 
