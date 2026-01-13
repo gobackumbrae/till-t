@@ -2,61 +2,50 @@
 <html lang="en">
 <head>
 
-<!-- TT_WEBGL_CROSS_STABILIZER_v1 -->
+
+<!-- TT_WEBGL_CROSS_STABILIZER_v2 -->
 <script>
 (() => {
   'use strict';
-  if (window.__ttWebglCrossStabilizerV1) return;
-  window.__ttWebglCrossStabilizerV1 = true;
+  if (window.__ttWebglCrossStabilizerV2) return;
+  window.__ttWebglCrossStabilizerV2 = true;
 
-  const locName = new WeakMap();   // loc -> string name
+  const locName = new WeakMap();   // loc -> uniform name
   const locInfo = new WeakMap();   // loc -> {kind, field}
-  const glState = new WeakMap();   // gl  -> per-kind state
+  const glState = new WeakMap();   // gl  -> state
 
-  const EPS = 1e-6;
+  const EPS = 1e-7;
 
-  const clamp = (x, a, b) => (x < a ? a : (x > b ? b : x));
+  const clamp = (x,a,b) => x<a?a:(x>b?b:x);
   const dot = (a,b) => a[0]*b[0] + a[1]*b[1] + a[2]*b[2];
-  const cross = (a,b) => [
-    a[1]*b[2] - a[2]*b[1],
-    a[2]*b[0] - a[0]*b[2],
-    a[0]*b[1] - a[1]*b[0],
-  ];
-  const len = (v) => Math.hypot(v[0], v[1], v[2]);
-  const norm = (v) => {
-    const l = len(v);
-    return (l < EPS) ? [0,1,0] : [v[0]/l, v[1]/l, v[2]/l];
-  };
+  const cross = (a,b) => [a[1]*b[2]-a[2]*b[1], a[2]*b[0]-a[0]*b[2], a[0]*b[1]-a[1]*b[0]];
+  const len = (v) => Math.hypot(v[0],v[1],v[2]);
+  const norm = (v) => { const l=len(v); return (l<EPS)?[0,1,0]:[v[0]/l,v[1]/l,v[2]/l]; };
+  const neg = (v) => [-v[0],-v[1],-v[2]];
 
-  const projTangent = (v, c) => {
-    const d = dot(v, c);
-    const p = [v[0]-c[0]*d, v[1]-c[1]*d, v[2]-c[2]*d];
-    const l = len(p);
+  function projTangentRaw(v, c) {
+    const d = dot(v,c);
+    const px = v[0]-c[0]*d, py = v[1]-c[1]*d, pz = v[2]-c[2]*d;
+    const l = Math.hypot(px,py,pz);
     if (l < EPS) return null;
-    return [p[0]/l, p[1]/l, p[2]/l];
-  };
+    return { v:[px/l, py/l, pz/l], rawLen:l };
+  }
+  function projTangent(v, c) {
+    const r = projTangentRaw(v,c);
+    return r ? r.v : null;
+  }
 
-  const rodrigues = (v, k, cosA, sinA) => {
-    // v*cos + (k×v)*sin + k(k·v)(1-cos)
-    const kxv = cross(k, v);
-    const kdv = dot(k, v);
-    return [
-      v[0]*cosA + kxv[0]*sinA + k[0]*kdv*(1-cosA),
-      v[1]*cosA + kxv[1]*sinA + k[1]*kdv*(1-cosA),
-      v[2]*cosA + kxv[2]*sinA + k[2]*kdv*(1-cosA),
-    ];
-  };
-
-  const pickFallbackUp = (c) => {
-    // pick axis least aligned with c
-    const ax = Math.abs(c[0]), ay = Math.abs(c[1]), az = Math.abs(c[2]);
+  function pickFallbackUp(c) {
+    // pick axis least aligned with c (stable everywhere, no single fixed "pole")
+    const ax=Math.abs(c[0]), ay=Math.abs(c[1]), az=Math.abs(c[2]);
     let ref = [0,1,0];
-    if (ax <= ay && ax <= az) ref = [1,0,0];
-    else if (az <= ax && az <= ay) ref = [0,0,1];
+    if (ax <= ay and ax <= az) ref = [1,0,0];
+    else if (az <= ax and az <= ay) ref = [0,0,1];
     return projTangent(ref, c) || projTangent([0,0,1], c) || projTangent([1,0,0], c) || [0,1,0];
-  };
+  }
 
-  const transportUp = (lastC, lastU, newC) => {
+  function transportUp(lastC, lastU, newC) {
+    // rotation-minimizing transport via the rotation that takes lastC -> newC
     const axis = cross(lastC, newC);
     const sinA = len(axis);
     const cosA = clamp(dot(lastC, newC), -1, 1);
@@ -65,24 +54,19 @@
       return projTangent(lastU, newC) || pickFallbackUp(newC);
     }
     const k = [axis[0]/sinA, axis[1]/sinA, axis[2]/sinA];
-    const rot = rodrigues(lastU, k, cosA, sinA);
+
+    // Rodrigues rotate lastU around k by angle with cosA/sinA
+    const kxv = cross(k, lastU);
+    const kdv = dot(k, lastU);
+    const rot = [
+      lastU[0]*cosA + kxv[0]*sinA + k[0]*kdv*(1-cosA),
+      lastU[1]*cosA + kxv[1]*sinA + k[1]*kdv*(1-cosA),
+      lastU[2]*cosA + kxv[2]*sinA + k[2]*kdv*(1-cosA),
+    ];
     return projTangent(rot, newC) || projTangent(lastU, newC) || pickFallbackUp(newC);
-  };
+  }
 
-  const getState = (gl) => {
-    let st = glState.get(gl);
-    if (!st) {
-      st = {
-        t: performance.now(),
-        grav: { center:null, lastCenter:null, up:null, order:null },
-        view: { center:null, lastCenter:null, up:null, order:null },
-      };
-      glState.set(gl, st);
-    }
-    return st;
-  };
-
-  const classifyName = (name) => {
+  function classify(name) {
     if (!name) return null;
     const n = String(name).toLowerCase();
 
@@ -92,19 +76,129 @@
     else if (n.endsWith("right")) field = "right";
     else return null;
 
-    // Gravity crosshair uniforms
-    if (n.includes("gravity")) return { kind: "grav", field };
+    let kind = null;
+    if (n.includes("gravity") || n.includes("grav")) kind = "grav";
+    else if (n.includes("cam") || n.includes("camera") || n.includes("view")) kind = "view";
+    else return null;
 
-    // View/camera crosshair uniforms (we accept cam/camera/view)
-    if (!n.includes("gravity") && (n.includes("cam") || n.includes("camera") || n.includes("view"))) {
-      return { kind: "view", field };
+    return { kind, field };
+  }
+
+  function getSt(gl) {
+    let st = glState.get(gl);
+    if (!st) {
+      st = {
+        lastT: performance.now(),
+        grav: { loc:{center:null,up:null,right:null}, pend:{center:null,up:null,right:null}, lastCenter:null, lastUp:null, order:null },
+        view: { loc:{center:null,up:null,right:null}, pend:{center:null,up:null,right:null}, lastCenter:null, lastUp:null, order:null },
+      };
+      glState.set(gl, st);
     }
-    return null;
-  };
+    return st;
+  }
+
+  function flushKind(gl, st, k, origU3f) {
+    const ks = st[k];
+    const pend = ks.pend;
+
+    // if nothing pending and we have state, nothing to do
+    const anyPending = !!(pend.center || pend.up || pend.right);
+    if (!anyPending && ks.lastCenter && ks.lastUp) return;
+
+    // Need locations to write
+    const lc = ks.loc.center, lu = ks.loc.up, lr = ks.loc.right;
+    if (!lc && !lu && !lr) {
+      pend.center = pend.up = pend.right = null;
+      return;
+    }
+
+    // Center
+    let center = ks.lastCenter;
+    if (pend.center) center = norm(pend.center);
+    if (!center) {
+      // can't proceed without a center; clear pending
+      pend.center = pend.up = pend.right = null;
+      return;
+    }
+
+    // Timing for smoothing
+    const now = performance.now();
+    const dt = clamp((now - st.lastT)/1000, 0.001, 0.05);
+    st.lastT = now;
+    const alpha = 1 - Math.exp(-24 * dt);
+
+    // Desired up from app (projected) + "reliability" (rawLen)
+    let desired = null;
+    let desiredStrength = 0;
+    if (pend.up) {
+      const pr = projTangentRaw(pend.up, center);
+      if (pr) { desired = pr.v; desiredStrength = pr.rawLen; }
+    }
+
+    // Initialize lastUp on first valid frame
+    if (!ks.lastUp) {
+      ks.lastUp = desired || pickFallbackUp(center);
+      ks.lastCenter = center.slice();
+    }
+
+    // Transport previous up to new center (stable everywhere)
+    const transported = transportUp(ks.lastCenter || center, ks.lastUp, center);
+
+    if (!desired) desired = transported;
+    if (dot(desired, transported) < 0) desired = neg(desired);
+
+    // Jump detection: if desired differs too much, ignore it (prevents snapping)
+    const d = clamp(dot(transported, desired), -1, 1);
+    const jump = Math.acos(d);                 // radians
+    const FREEZE = 0.75;                       // ~43°
+    const MIN_STRENGTH = 0.10;                 // projection length threshold (unit vectors -> sin(angle))
+    let w = 0;
+
+    if (jump < FREEZE && desiredStrength >= MIN_STRENGTH) {
+      const f = 1 - (jump / FREEZE);
+      w = alpha * f * f; // ease
+    } else {
+      w = 0;             // completely ignore unstable desired frame
+    }
+
+    let up = norm([
+      transported[0]*(1-w) + desired[0]*w,
+      transported[1]*(1-w) + desired[1]*w,
+      transported[2]*(1-w) + desired[2]*w,
+    ]);
+    up = projTangent(up, center) || transported;
+
+    // Keep sign consistent
+    if (dot(up, ks.lastUp) < 0) up = neg(up);
+
+    // Right: choose a consistent cross order and never change it (prevents mirroring flips)
+    const candA = norm(cross(up, center));
+    const candB = norm(cross(center, up));
+
+    if (!ks.order) {
+      if (pend.right) {
+        const dr = norm(pend.right);
+        ks.order = (dot(candA, dr) >= dot(candB, dr)) ? "A" : "B";
+      } else {
+        ks.order = "A";
+      }
+    }
+    const right = (ks.order === "A") ? candA : candB;
+
+    ks.lastCenter = center.slice();
+    ks.lastUp = up.slice();
+
+    // Write uniforms (using original, not patched)
+    if (lc) origU3f.call(gl, lc, center[0], center[1], center[2]);
+    if (lu) origU3f.call(gl, lu, up[0],     up[1],     up[2]);
+    if (lr) origU3f.call(gl, lr, right[0],  right[1],  right[2]);
+
+    pend.center = pend.up = pend.right = null;
+  }
 
   function patchProto(proto) {
-    if (!proto || proto.__ttCrossStabV1) return;
-    proto.__ttCrossStabV1 = true;
+    if (!proto || proto.__ttCrossStabV2) return;
+    proto.__ttCrossStabV2 = true;
 
     const origGet = proto.getUniformLocation;
     proto.getUniformLocation = function(program, name) {
@@ -114,90 +208,71 @@
     };
 
     const origU3f = proto.uniform3f;
+    const origU3fv = proto.uniform3fv;
+
     proto.uniform3f = function(loc, x, y, z) {
       let info = locInfo.get(loc);
       if (!info) {
-        info = classifyName(locName.get(loc));
+        info = classify(locName.get(loc));
         if (info) locInfo.set(loc, info);
       }
       if (!info) return origU3f.call(this, loc, x, y, z);
 
-      const st = getState(this);
-      const now = performance.now();
-      const dt = clamp((now - st.t) / 1000, 0.001, 0.05);
-      st.t = now;
+      const st = getSt(this);
+      const ks = st[info.kind];
 
-      // base smoothing
-      const alpha = 1 - Math.exp(-22 * dt);
+      // record locations
+      ks.loc[info.field] = loc;
 
-      const obj = st[info.kind];
-
-      if (info.field === "center") {
-        const c = norm([x,y,z]);
-        obj.center = c;
-        if (!obj.lastCenter) obj.lastCenter = c.slice();
-        return origU3f.call(this, loc, c[0], c[1], c[2]);
-      }
-
-      if (info.field === "up") {
-        const c = obj.center;
-        if (!c) return origU3f.call(this, loc, x, y, z);
-
-        let desired = projTangent([x,y,z], c) || pickFallbackUp(c);
-
-        if (!obj.up) {
-          obj.up = desired.slice();
-          obj.lastCenter = c.slice();
-          return origU3f.call(this, loc, obj.up[0], obj.up[1], obj.up[2]);
-        }
-
-        const transported = transportUp(obj.lastCenter || c, obj.up, c);
-
-        // choose same hemisphere (prevents 180° flips)
-        if (dot(desired, transported) < 0) desired = [-desired[0], -desired[1], -desired[2]];
-
-        // If desired jumps a lot (common at poles/borders), follow slower to prevent snap.
-        const d = clamp(dot(transported, desired), -1, 1);
-        const jump = Math.acos(d); // 0..pi
-        const limiter = Math.min(1, 0.35 / Math.max(0.001, jump));
-        const w = alpha * limiter;
-
-        const blended = norm([
-          transported[0]*(1-w) + desired[0]*w,
-          transported[1]*(1-w) + desired[1]*w,
-          transported[2]*(1-w) + desired[2]*w,
-        ]);
-
-        obj.up = projTangent(blended, c) || transported;
-        obj.lastCenter = c.slice();
-
-        return origU3f.call(this, loc, obj.up[0], obj.up[1], obj.up[2]);
-      }
-
-      if (info.field === "right") {
-        const c = obj.center, u = obj.up;
-        if (!c || !u) return origU3f.call(this, loc, x, y, z);
-
-        const desiredR = norm([x,y,z]);
-        const candA = norm(cross(u, c));
-        const candB = norm(cross(c, u));
-
-        // Lock the cross order once (prevents mirrors/flips).
-        if (!obj.order) obj.order = (dot(candA, desiredR) >= dot(candB, desiredR)) ? "A" : "B";
-
-        const r = (obj.order === "A") ? candA : candB;
-        return origU3f.call(this, loc, r[0], r[1], r[2]);
-      }
-
-      return origU3f.call(this, loc, x, y, z);
+      // buffer values (do NOT write immediately)
+      ks.pend[info.field] = [x,y,z];
+      return;
     };
 
-    // If your code uses uniform3fv(vec3), route through the stabilized uniform3f.
-    const origU3fv = proto.uniform3fv;
     if (origU3fv) {
       proto.uniform3fv = function(loc, v) {
         if (v && v.length === 3) return this.uniform3f(loc, v[0], v[1], v[2]);
         return origU3fv.call(this, loc, v);
+      };
+    }
+
+    const origDA = proto.drawArrays;
+    if (origDA) {
+      proto.drawArrays = function() {
+        const st = getSt(this);
+        flushKind(this, st, "grav", origU3f);
+        flushKind(this, st, "view", origU3f);
+        return origDA.apply(this, arguments);
+      };
+    }
+
+    const origDE = proto.drawElements;
+    if (origDE) {
+      proto.drawElements = function() {
+        const st = getSt(this);
+        flushKind(this, st, "grav", origU3f);
+        flushKind(this, st, "view", origU3f);
+        return origDE.apply(this, arguments);
+      };
+    }
+
+    // WebGL2 instanced draws (just in case)
+    const origDAI = proto.drawArraysInstanced;
+    if (origDAI) {
+      proto.drawArraysInstanced = function() {
+        const st = getSt(this);
+        flushKind(this, st, "grav", origU3f);
+        flushKind(this, st, "view", origU3f);
+        return origDAI.apply(this, arguments);
+      };
+    }
+    const origDEI = proto.drawElementsInstanced;
+    if (origDEI) {
+      proto.drawElementsInstanced = function() {
+        const st = getSt(this);
+        flushKind(this, st, "grav", origU3f);
+        flushKind(this, st, "view", origU3f);
+        return origDEI.apply(this, arguments);
       };
     }
   }
@@ -206,7 +281,8 @@
   patchProto(window.WebGL2RenderingContext && WebGL2RenderingContext.prototype);
 })();
 </script>
-<!-- /TT_WEBGL_CROSS_STABILIZER_v1 -->
+<!-- /TT_WEBGL_CROSS_STABILIZER_v2 -->
+
 
 
   <meta charset="utf-8">
