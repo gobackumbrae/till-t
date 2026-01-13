@@ -39,8 +39,8 @@
     // pick axis least aligned with c (stable everywhere, no single fixed "pole")
     const ax=Math.abs(c[0]), ay=Math.abs(c[1]), az=Math.abs(c[2]);
     let ref = [0,1,0];
-    if (ax <= ay and ax <= az) ref = [1,0,0];
-    else if (az <= ax and az <= ay) ref = [0,0,1];
+    if (ax <= ay && ax <= az) ref = [1,0,0];
+    else if (az <= ax && az <= ay) ref = [0,0,1];
     return projTangent(ref, c) || projTangent([0,0,1], c) || projTangent([1,0,0], c) || [0,1,0];
   }
 
@@ -101,7 +101,7 @@
     const ks = st[k];
     const pend = ks.pend;
 
-    // if nothing pending and we have state, nothing to do
+    // if nothing pending && we have state, nothing to do
     const anyPending = !!(pend.center || pend.up || pend.right);
     if (!anyPending && ks.lastCenter && ks.lastUp) return;
 
@@ -171,7 +171,7 @@
     // Keep sign consistent
     if (dot(up, ks.lastUp) < 0) up = neg(up);
 
-    // Right: choose a consistent cross order and never change it (prevents mirroring flips)
+    // Right: choose a consistent cross order && never change it (prevents mirroring flips)
     const candA = norm(cross(up, center));
     const candB = norm(cross(center, up));
 
