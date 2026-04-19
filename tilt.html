@@ -1,0 +1,1022 @@
+<!doctype html>
+<html>
+<head>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<style>
+:root {
+  color-scheme: light dark;
+}
+
+html, body {
+  margin: 0;
+  padding: 0;
+  background: Canvas;
+  color: CanvasText;
+  font-family: sans-serif;
+}
+
+body {
+  padding-top: 110px;
+}
+
+#readoutPanel {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 1000;
+  box-sizing: border-box;
+  padding: 8px;
+  background: Canvas;
+  border-bottom: 1px solid GrayText;
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 8px;
+  align-items: stretch;
+}
+
+#leftPanel {
+  min-width: 0;
+}
+
+#rightPanel {
+  display: flex;
+  align-items: stretch;
+}
+
+#buttonHolder {
+  margin-bottom: 6px;
+}
+
+#controls {
+  padding: 10px;
+}
+
+#profileBar {
+  display: grid;
+  grid-template-columns: 1fr auto auto auto;
+  gap: 8px;
+  margin-bottom: 14px;
+}
+
+#rangeButtons {
+  margin-bottom: 14px;
+}
+
+.sharedBlock {
+  margin-bottom: 24px;
+}
+
+.sharedHeader {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.multiTrack {
+  position: relative;
+  height: 36px;
+}
+
+.multiTrackBase {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 50%;
+  height: 6px;
+  transform: translateY(-50%);
+  border-radius: 999px;
+  background: color-mix(in srgb, Canvas 85%, CanvasText 15%);
+}
+
+.segmentLayer {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.segmentFill {
+  position: absolute;
+  top: 50%;
+  height: 6px;
+  transform: translateY(-50%);
+  border-radius: 999px;
+  background: color-mix(in srgb, CanvasText 70%, Canvas 30%);
+}
+
+#rangesList {
+  display: grid;
+  gap: 12px;
+}
+
+.rangeRow {
+  border: 1px solid GrayText;
+  border-radius: 10px;
+  padding: 12px;
+  background: color-mix(in srgb, Canvas 95%, CanvasText 5%);
+}
+
+.rangeRow.disabled {
+  opacity: 0.55;
+}
+
+.rangeRowHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.rangeRowTitle {
+  font-weight: bold;
+}
+
+.rangeRowControls {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.toggleLabel {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  user-select: none;
+}
+
+.axisBlock {
+  margin-bottom: 18px;
+}
+
+.axisBlock:last-child {
+  margin-bottom: 0;
+}
+
+.sliderHeader {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 8px;
+  gap: 8px;
+}
+
+.rangePair {
+  position: relative;
+  height: 36px;
+}
+
+.rangeTrack {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 50%;
+  height: 6px;
+  transform: translateY(-50%);
+  border-radius: 999px;
+  background: color-mix(in srgb, Canvas 85%, CanvasText 15%);
+  pointer-events: none;
+}
+
+.rangeFill {
+  position: absolute;
+  top: 50%;
+  height: 6px;
+  transform: translateY(-50%);
+  border-radius: 999px;
+  background: color-mix(in srgb, CanvasText 70%, Canvas 30%);
+  pointer-events: none;
+}
+
+.rangePair input[type="range"] {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 100%;
+  height: 36px;
+  margin: 0;
+  background: none;
+  pointer-events: none;
+  -webkit-appearance: none;
+  appearance: none;
+}
+
+.rangePair input[type="range"]::-webkit-slider-runnable-track {
+  height: 6px;
+  background: transparent;
+}
+
+.rangePair input[type="range"]::-moz-range-track {
+  height: 6px;
+  background: transparent;
+}
+
+.rangePair input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  border: 1px solid GrayText;
+  background: Canvas;
+  pointer-events: auto;
+  cursor: pointer;
+  margin-top: -8px;
+  box-sizing: border-box;
+}
+
+.rangePair input[type="range"]::-moz-range-thumb {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  border: 1px solid GrayText;
+  background: Canvas;
+  pointer-events: auto;
+  cursor: pointer;
+  box-sizing: border-box;
+}
+
+button,
+select,
+input[type="text"] {
+  padding: 10px;
+  font: inherit;
+  box-sizing: border-box;
+  width: 100%;
+}
+
+pre {
+  margin: 0;
+  padding: 10px;
+  border: 1px solid GrayText;
+  border-radius: 8px;
+  background: color-mix(in srgb, Canvas 92%, CanvasText 8%);
+  white-space: pre-wrap;
+  overflow: hidden;
+}
+
+#warn {
+  min-width: 220px;
+  max-width: 40vw;
+  padding: 10px 12px;
+  border-radius: 8px;
+  font-weight: bold;
+  display: flex;
+  align-items: center;
+  box-sizing: border-box;
+}
+
+.warn-ok {
+  background: color-mix(in srgb, Canvas 90%, CanvasText 10%);
+  color: CanvasText;
+}
+
+.warn-bad {
+  background: color-mix(in srgb, red 20%, Canvas 80%);
+  color: CanvasText;
+}
+
+#profileNameInput {
+  min-width: 0;
+}
+
+@media (max-width: 700px) {
+  body {
+    padding-top: 150px;
+  }
+
+  #readoutPanel {
+    grid-template-columns: 1fr;
+  }
+
+  #rightPanel {
+    display: block;
+  }
+
+  #warn {
+    min-width: 0;
+    max-width: none;
+    width: 100%;
+  }
+
+  .rangeRowHeader {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .rangeRowControls {
+    justify-content: space-between;
+  }
+
+  #profileBar {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (prefers-color-scheme: dark) {
+  pre {
+    background: color-mix(in srgb, Canvas 85%, white 15%);
+  }
+
+  .warn-ok {
+    background: color-mix(in srgb, Canvas 82%, white 18%);
+  }
+
+  .warn-bad {
+    background: color-mix(in srgb, red 28%, Canvas 72%);
+  }
+
+  .rangeTrack,
+  .multiTrackBase {
+    background: color-mix(in srgb, Canvas 75%, white 25%);
+  }
+
+  .rangeFill,
+  .segmentFill {
+    background: color-mix(in srgb, white 70%, Canvas 30%);
+  }
+
+  .rangeRow {
+    background: color-mix(in srgb, Canvas 88%, white 12%);
+  }
+}
+</style>
+</head>
+<body>
+
+<div id="readoutPanel">
+  <div id="leftPanel">
+    <div id="buttonHolder"></div>
+    <pre id="out">Waiting for tilt…</pre>
+  </div>
+  <div id="rightPanel">
+    <div id="warn" class="warn-ok">Waiting for tilt…</div>
+  </div>
+</div>
+
+<div id="controls">
+  <div id="profileBar">
+    <select id="profileSelect" aria-label="Choose profile"></select>
+    <input id="profileNameInput" type="text" placeholder="New profile name">
+    <button id="addProfileBtn" type="button">Add profile</button>
+    <button id="deleteProfileBtn" type="button">Delete profile</button>
+  </div>
+
+  <div id="rangeButtons">
+    <button id="addRangeBtn" type="button">Add range</button>
+  </div>
+
+  <div class="sharedBlock">
+    <div class="sharedHeader">
+      <span>Gamma allowed segments</span>
+      <span>-90 to 90</span>
+    </div>
+    <div class="multiTrack">
+      <div class="multiTrackBase"></div>
+      <div class="segmentLayer" id="gammaSegments"></div>
+    </div>
+  </div>
+
+  <div class="sharedBlock">
+    <div class="sharedHeader">
+      <span>Beta allowed segments</span>
+      <span>-180 to 180</span>
+    </div>
+    <div class="multiTrack">
+      <div class="multiTrackBase"></div>
+      <div class="segmentLayer" id="betaSegments"></div>
+    </div>
+  </div>
+
+  <div id="rangesList"></div>
+</div>
+
+<script>
+const STORAGE_KEY = "tiltProfiles_v1";
+
+const out = document.getElementById("out");
+const warn = document.getElementById("warn");
+const buttonHolder = document.getElementById("buttonHolder");
+const rangesList = document.getElementById("rangesList");
+const addRangeBtn = document.getElementById("addRangeBtn");
+const gammaSegments = document.getElementById("gammaSegments");
+const betaSegments = document.getElementById("betaSegments");
+const profileSelect = document.getElementById("profileSelect");
+const profileNameInput = document.getElementById("profileNameInput");
+const addProfileBtn = document.getElementById("addProfileBtn");
+const deleteProfileBtn = document.getElementById("deleteProfileBtn");
+
+let lastGamma = null;
+let lastBeta = null;
+
+let audioCtx = null;
+let oscillator = null;
+let gainNode = null;
+let beepIntervalId = null;
+let soundMode = "off";
+
+let nextRangeId = 1;
+let suppressProfileSelectChange = false;
+
+const ranges = [];
+let store = {
+  currentProfileId: null,
+  profiles: []
+};
+
+function pct(value, min, max) {
+  return ((value - min) / (max - min)) * 100;
+}
+
+function clampNumber(value, min, max, fallback) {
+  if (typeof value !== "number" || !Number.isFinite(value)) return fallback;
+  if (value < min) return min;
+  if (value > max) return max;
+  return value;
+}
+
+function getDefaultRangeData() {
+  return {
+    enabled: true,
+    gmin: -20,
+    gmax: 20,
+    bmin: -20,
+    bmax: 20
+  };
+}
+
+function makeProfile(name) {
+  return {
+    id: crypto.randomUUID ? crypto.randomUUID() : String(Date.now() + Math.random()),
+    name: String(name || "Profile"),
+    ranges: [getDefaultRangeData()]
+  };
+}
+
+function getCurrentProfile() {
+  return store.profiles.find(profile => profile.id === store.currentProfileId) || null;
+}
+
+function getActiveRanges() {
+  return ranges.filter(range => range.enabled.checked);
+}
+
+function getCurrentRangesData() {
+  return ranges.map(range => ({
+    enabled: range.enabled.checked,
+    gmin: Number(range.gmin.value),
+    gmax: Number(range.gmax.value),
+    bmin: Number(range.bmin.value),
+    bmax: Number(range.bmax.value)
+  }));
+}
+
+function setWarningState(isBad, text) {
+  warn.textContent = text;
+  warn.className = isBad ? "warn-bad" : "warn-ok";
+}
+
+function updateRangeFill(minSlider, maxSlider, fillEl) {
+  const min = Number(minSlider.min);
+  const max = Number(minSlider.max);
+  const a = Number(minSlider.value);
+  const b = Number(maxSlider.value);
+
+  fillEl.style.left = pct(a, min, max) + "%";
+  fillEl.style.width = (pct(b, min, max) - pct(a, min, max)) + "%";
+}
+
+function clampPair(changed, other, isMinHandle) {
+  const changedValue = Number(changed.value);
+  const otherValue = Number(other.value);
+
+  if (isMinHandle && changedValue > otherValue) {
+    changed.value = other.value;
+  }
+
+  if (!isMinHandle && changedValue < otherValue) {
+    changed.value = other.value;
+  }
+}
+
+function renderSharedSegments() {
+  gammaSegments.innerHTML = "";
+  betaSegments.innerHTML = "";
+
+  for (const range of getActiveRanges()) {
+    const gSeg = document.createElement("div");
+    gSeg.className = "segmentFill";
+    gSeg.style.left = pct(Number(range.gmin.value), -90, 90) + "%";
+    gSeg.style.width =
+      (pct(Number(range.gmax.value), -90, 90) - pct(Number(range.gmin.value), -90, 90)) + "%";
+    gammaSegments.appendChild(gSeg);
+
+    const bSeg = document.createElement("div");
+    bSeg.className = "segmentFill";
+    bSeg.style.left = pct(Number(range.bmin.value), -180, 180) + "%";
+    bSeg.style.width =
+      (pct(Number(range.bmax.value), -180, 180) - pct(Number(range.bmin.value), -180, 180)) + "%";
+    betaSegments.appendChild(bSeg);
+  }
+}
+
+function ensureAudioContext() {
+  if (!audioCtx) {
+    audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  }
+}
+
+function createAudioChain() {
+  ensureAudioContext();
+  if (oscillator) return;
+
+  oscillator = audioCtx.createOscillator();
+  gainNode = audioCtx.createGain();
+
+  oscillator.type = "sine";
+  gainNode.gain.value = 0;
+
+  oscillator.connect(gainNode);
+  gainNode.connect(audioCtx.destination);
+  oscillator.start();
+}
+
+function stopAllSound() {
+  if (beepIntervalId) {
+    clearInterval(beepIntervalId);
+    beepIntervalId = null;
+  }
+
+  if (gainNode && audioCtx) {
+    gainNode.gain.cancelScheduledValues(audioCtx.currentTime);
+    gainNode.gain.setValueAtTime(0, audioCtx.currentTime);
+  }
+
+  soundMode = "off";
+}
+
+function startWarningBeep() {
+  if (soundMode === "warning") return;
+
+  createAudioChain();
+  stopAllSound();
+
+  soundMode = "warning";
+  oscillator.frequency.setValueAtTime(880, audioCtx.currentTime);
+
+  const beepInterval = 0.5;
+  const beepDuration = 0.08;
+
+  function schedule(base) {
+    for (let i = 0; i < 3; i++) {
+      const t = base + i * beepInterval;
+      gainNode.gain.setValueAtTime(0, t);
+      gainNode.gain.linearRampToValueAtTime(0.25, t + 0.01);
+      gainNode.gain.setValueAtTime(0.25, t + beepDuration);
+      gainNode.gain.linearRampToValueAtTime(0, t + beepDuration + 0.01);
+    }
+  }
+
+  schedule(audioCtx.currentTime);
+
+  beepIntervalId = setInterval(() => {
+    schedule(audioCtx.currentTime);
+  }, 1000);
+}
+
+function startContinuousOkTone() {
+  if (soundMode === "ok") return;
+
+  createAudioChain();
+  stopAllSound();
+
+  soundMode = "ok";
+  oscillator.frequency.setValueAtTime(440, audioCtx.currentTime);
+
+  gainNode.gain.setValueAtTime(gainNode.gain.value, audioCtx.currentTime);
+  gainNode.gain.linearRampToValueAtTime(0.12, audioCtx.currentTime + 0.03);
+}
+
+function formatRangeSummary() {
+  const profile = getCurrentProfile();
+  const profileName = profile ? profile.name : "-";
+
+  if (ranges.length === 0) {
+    return (
+      "profile: " + profileName + "\n" +
+      "ranges: none"
+    );
+  }
+
+  return (
+    "profile: " + profileName + "\n" +
+    ranges.map((range, index) => {
+      const state = range.enabled.checked ? "active" : "inactive";
+      return (
+        "range " + (index + 1) +
+        " [" + state + "]" +
+        ": gamma " + range.gmin.value + " to " + range.gmax.value +
+        ", beta " + range.bmin.value + " to " + range.bmax.value
+      );
+    }).join("\n")
+  );
+}
+
+function isInsideAnyActiveRange(gamma, beta) {
+  return getActiveRanges().some(range => {
+    return (
+      gamma >= Number(range.gmin.value) &&
+      gamma <= Number(range.gmax.value) &&
+      beta >= Number(range.bmin.value) &&
+      beta <= Number(range.bmax.value)
+    );
+  });
+}
+
+function evaluateWarning() {
+  const activeRanges = getActiveRanges();
+
+  out.textContent =
+    "gamma: " + (lastGamma === null ? "-" : lastGamma.toFixed(2)) +
+    "    |    beta: " + (lastBeta === null ? "-" : lastBeta.toFixed(2)) + "\n" +
+    formatRangeSummary();
+
+  if (lastGamma === null || lastBeta === null) {
+    setWarningState(false, "Waiting for tilt…");
+    stopAllSound();
+    return;
+  }
+
+  if (activeRanges.length === 0) {
+    setWarningState(true, "WARNING: no active ranges configured");
+    startContinuousOkTone();
+    return;
+  }
+
+  if (isInsideAnyActiveRange(lastGamma, lastBeta)) {
+    setWarningState(false, "Within active range");
+    startWarningBeep();
+  } else {
+    setWarningState(true, "WARNING: tilt outside active range");
+    startContinuousOkTone();
+  }
+}
+
+function updateRangeRow(range) {
+  clampPair(range.gmin, range.gmax, true);
+  clampPair(range.gmax, range.gmin, false);
+  clampPair(range.bmin, range.bmax, true);
+  clampPair(range.bmax, range.bmin, false);
+
+  range.gminv.textContent = range.gmin.value;
+  range.gmaxv.textContent = range.gmax.value;
+  range.bminv.textContent = range.bmin.value;
+  range.bmaxv.textContent = range.bmax.value;
+
+  updateRangeFill(range.gmin, range.gmax, range.gammaFill);
+  updateRangeFill(range.bmin, range.bmax, range.betaFill);
+
+  range.el.classList.toggle("disabled", !range.enabled.checked);
+}
+
+function renumberRanges() {
+  ranges.forEach((range, index) => {
+    range.title.textContent = "Range " + (index + 1);
+  });
+}
+
+function clearRenderedRanges() {
+  ranges.length = 0;
+  rangesList.innerHTML = "";
+  nextRangeId = 1;
+}
+
+function saveStore() {
+  const profile = getCurrentProfile();
+  if (profile) {
+    profile.ranges = getCurrentRangesData();
+  }
+
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(store));
+  renderProfileOptions();
+}
+
+function refreshAll() {
+  for (const range of ranges) {
+    updateRangeRow(range);
+  }
+
+  renderSharedSegments();
+  evaluateWarning();
+  saveStore();
+}
+
+function removeRange(id) {
+  const index = ranges.findIndex(r => r.id === id);
+  if (index === -1) return;
+
+  const [range] = ranges.splice(index, 1);
+  range.el.remove();
+
+  renumberRanges();
+  refreshAll();
+}
+
+function createRangeRow(initial = {}) {
+  const id = nextRangeId++;
+
+  const row = document.createElement("div");
+  row.className = "rangeRow";
+
+  row.innerHTML = `
+    <div class="rangeRowHeader">
+      <div class="rangeRowTitle"></div>
+      <div class="rangeRowControls">
+        <label class="toggleLabel">
+          <input type="checkbox" class="enabled">
+          <span>Active</span>
+        </label>
+        <button type="button" data-action="remove">Remove</button>
+      </div>
+    </div>
+
+    <div class="axisBlock">
+      <div class="sliderHeader">
+        <span>Gamma</span>
+        <span><span class="gminv"></span> to <span class="gmaxv"></span></span>
+      </div>
+      <div class="rangePair">
+        <div class="rangeTrack"></div>
+        <div class="rangeFill gammaFill"></div>
+        <input type="range" class="gmin" min="-90" max="90">
+        <input type="range" class="gmax" min="-90" max="90">
+      </div>
+    </div>
+
+    <div class="axisBlock">
+      <div class="sliderHeader">
+        <span>Beta</span>
+        <span><span class="bminv"></span> to <span class="bmaxv"></span></span>
+      </div>
+      <div class="rangePair">
+        <div class="rangeTrack"></div>
+        <div class="rangeFill betaFill"></div>
+        <input type="range" class="bmin" min="-180" max="180">
+        <input type="range" class="bmax" min="-180" max="180">
+      </div>
+    </div>
+  `;
+
+  const range = {
+    id,
+    el: row,
+    title: row.querySelector(".rangeRowTitle"),
+    enabled: row.querySelector(".enabled"),
+    gmin: row.querySelector(".gmin"),
+    gmax: row.querySelector(".gmax"),
+    bmin: row.querySelector(".bmin"),
+    bmax: row.querySelector(".bmax"),
+    gminv: row.querySelector(".gminv"),
+    gmaxv: row.querySelector(".gmaxv"),
+    bminv: row.querySelector(".bminv"),
+    bmaxv: row.querySelector(".bmaxv"),
+    gammaFill: row.querySelector(".gammaFill"),
+    betaFill: row.querySelector(".betaFill")
+  };
+
+  const safeGmin = clampNumber(initial.gmin, -90, 90, -20);
+  const safeGmax = clampNumber(initial.gmax, -90, 90, 20);
+  const safeBmin = clampNumber(initial.bmin, -180, 180, -20);
+  const safeBmax = clampNumber(initial.bmax, -180, 180, 20);
+
+  range.enabled.checked = initial.enabled !== false;
+  range.gmin.value = safeGmin;
+  range.gmax.value = safeGmax;
+  range.bmin.value = safeBmin;
+  range.bmax.value = safeBmax;
+
+  [range.gmin, range.gmax, range.bmin, range.bmax].forEach(slider => {
+    slider.addEventListener("input", refreshAll);
+  });
+
+  range.enabled.addEventListener("change", refreshAll);
+
+  row.querySelector('[data-action="remove"]').addEventListener("click", () => {
+    removeRange(id);
+  });
+
+  ranges.push(range);
+  rangesList.appendChild(row);
+
+  renumberRanges();
+  refreshAll();
+}
+
+function renderProfileOptions() {
+  const currentProfileId = store.currentProfileId;
+
+  suppressProfileSelectChange = true;
+  profileSelect.innerHTML = "";
+
+  for (const profile of store.profiles) {
+    const option = document.createElement("option");
+    option.value = profile.id;
+    option.textContent = profile.name;
+    option.selected = profile.id === currentProfileId;
+    profileSelect.appendChild(option);
+  }
+
+  suppressProfileSelectChange = false;
+
+  deleteProfileBtn.disabled = store.profiles.length <= 1;
+}
+
+function loadProfileIntoUI(profileId) {
+  const profile = store.profiles.find(item => item.id === profileId);
+  if (!profile) return;
+
+  store.currentProfileId = profile.id;
+  clearRenderedRanges();
+
+  const rangeData = Array.isArray(profile.ranges) ? profile.ranges : [];
+
+  if (rangeData.length === 0) {
+    createRangeRow(getDefaultRangeData());
+  } else {
+    for (const item of rangeData) {
+      createRangeRow({
+        enabled: item && item.enabled !== false,
+        gmin: item ? item.gmin : undefined,
+        gmax: item ? item.gmax : undefined,
+        bmin: item ? item.bmin : undefined,
+        bmax: item ? item.bmax : undefined
+      });
+    }
+  }
+
+  renderProfileOptions();
+  evaluateWarning();
+}
+
+function addProfile(name) {
+  const trimmed = String(name || "").trim();
+  const finalName = trimmed || ("Profile " + (store.profiles.length + 1));
+  const profile = makeProfile(finalName);
+
+  store.profiles.push(profile);
+  store.currentProfileId = profile.id;
+  saveStore();
+  loadProfileIntoUI(profile.id);
+}
+
+function deleteCurrentProfile() {
+  if (store.profiles.length <= 1) return;
+
+  const index = store.profiles.findIndex(profile => profile.id === store.currentProfileId);
+  if (index === -1) return;
+
+  store.profiles.splice(index, 1);
+
+  const fallbackProfile = store.profiles[Math.max(0, index - 1)] || store.profiles[0];
+  store.currentProfileId = fallbackProfile ? fallbackProfile.id : null;
+
+  saveStore();
+
+  if (fallbackProfile) {
+    loadProfileIntoUI(fallbackProfile.id);
+  }
+}
+
+function loadStore() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (!raw) return false;
+
+    const parsed = JSON.parse(raw);
+    if (!parsed || typeof parsed !== "object") return false;
+    if (!Array.isArray(parsed.profiles)) return false;
+
+    const validProfiles = [];
+
+    for (const profile of parsed.profiles) {
+      if (!profile || typeof profile !== "object") continue;
+      if (typeof profile.id !== "string" || typeof profile.name !== "string") continue;
+
+      const validRanges = Array.isArray(profile.ranges)
+        ? profile.ranges
+            .filter(item => item && typeof item === "object")
+            .map(item => ({
+              enabled: item.enabled !== false,
+              gmin: clampNumber(item.gmin, -90, 90, -20),
+              gmax: clampNumber(item.gmax, -90, 90, 20),
+              bmin: clampNumber(item.bmin, -180, 180, -20),
+              bmax: clampNumber(item.bmax, -180, 180, 20)
+            }))
+        : [getDefaultRangeData()];
+
+      validProfiles.push({
+        id: profile.id,
+        name: profile.name || "Profile",
+        ranges: validRanges.length > 0 ? validRanges : [getDefaultRangeData()]
+      });
+    }
+
+    if (validProfiles.length === 0) return false;
+
+    store.profiles = validProfiles;
+    store.currentProfileId =
+      validProfiles.some(profile => profile.id === parsed.currentProfileId)
+        ? parsed.currentProfileId
+        : validProfiles[0].id;
+
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function ensureInitialStore() {
+  if (!loadStore()) {
+    const profile = makeProfile("Default");
+    store = {
+      currentProfileId: profile.id,
+      profiles: [profile]
+    };
+    saveStore();
+  }
+}
+
+function handleTilt(e) {
+  lastGamma = e.gamma;
+  lastBeta = e.beta;
+  evaluateWarning();
+}
+
+function startTilt() {
+  window.addEventListener("deviceorientation", handleTilt);
+}
+
+function addEnableButton() {
+  const btn = document.createElement("button");
+  btn.textContent = "Enable tilt";
+
+  btn.onclick = async () => {
+    ensureAudioContext();
+
+    if (audioCtx.state === "suspended") {
+      await audioCtx.resume();
+    }
+
+    const permission = await DeviceOrientationEvent.requestPermission();
+    if (permission === "granted") {
+      startTilt();
+      btn.remove();
+    }
+  };
+
+  buttonHolder.appendChild(btn);
+}
+
+profileSelect.addEventListener("change", () => {
+  if (suppressProfileSelectChange) return;
+  loadProfileIntoUI(profileSelect.value);
+  saveStore();
+});
+
+addProfileBtn.addEventListener("click", () => {
+  addProfile(profileNameInput.value);
+  profileNameInput.value = "";
+  profileNameInput.focus();
+});
+
+profileNameInput.addEventListener("keydown", e => {
+  if (e.key === "Enter") {
+    addProfileBtn.click();
+  }
+});
+
+deleteProfileBtn.addEventListener("click", () => {
+  deleteCurrentProfile();
+});
+
+addRangeBtn.addEventListener("click", () => {
+  createRangeRow(getDefaultRangeData());
+});
+
+ensureInitialStore();
+loadProfileIntoUI(store.currentProfileId);
+evaluateWarning();
+
+if (typeof DeviceOrientationEvent === "undefined") {
+  setWarningState(true, "Orientation sensor not supported.");
+} else if (typeof DeviceOrientationEvent.requestPermission === "function") {
+  addEnableButton();
+} else {
+  startTilt();
+}
+</script>
+
+</body>
+</html>
